@@ -1,12 +1,14 @@
 """Operational commands.
 
     python -m app.cli init            # migrate, ensure queue stream, seed once (used by the init service)
+    python -m app.cli serve           # init, then run the API on $PORT (single-command platforms)
     python -m app.cli reset --yes     # DESTRUCTIVE: delete all data, purge the queue, reseed
 """
 
 import argparse
 import asyncio
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -86,6 +88,19 @@ def cmd_init(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Initialize, then replace this process with uvicorn so it receives signals directly."""
+    cmd_init(args)
+    port = str(get_settings().port)
+    log.info("starting api", extra={"port": port})
+    sys.stdout.flush()
+    os.execvp(
+        "uvicorn",
+        ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", port, "--proxy-headers", "--forwarded-allow-ips", "*"],
+    )
+    return 0  # unreachable
+
+
 def cmd_reset(args: argparse.Namespace) -> int:
     if not args.yes:
         print("Refusing to reset without --yes. This deletes ALL contacts, campaigns and delivery history.", file=sys.stderr)
@@ -106,6 +121,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="migrate, prepare the queue, seed demo data once").set_defaults(func=cmd_init)
+    sub.add_parser("serve", help="init, then run the API server on $PORT").set_defaults(func=cmd_serve)
     reset = sub.add_parser("reset", help="DESTRUCTIVE: delete all data and reseed")
     reset.add_argument("--yes", action="store_true", help="confirm deletion of all data")
     reset.set_defaults(func=cmd_reset)

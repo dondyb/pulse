@@ -36,4 +36,7 @@ USER pulse
 EXPOSE 8000
 # tini forwards SIGTERM to the process so each entrypoint can shut down gracefully.
 ENTRYPOINT ["tini", "--"]
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default: migrate + seed once, then serve the API on $PORT (8000). Docker Compose
+# overrides the command per service; single-image platforms can use this as-is
+# and set the worker/cron commands explicitly.
+CMD ["python", "-m", "app.cli", "serve"]

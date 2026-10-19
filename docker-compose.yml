@@ -10,6 +10,8 @@ x-backend: &backend
   environment: &backend-env
     DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://pulse:pulse@postgres:5432/pulse}
     NATS_URL: ${NATS_URL:-nats://nats:4222}
+    NATS_USER: ${NATS_USER:-}
+    NATS_PASSWORD: ${NATS_PASSWORD:-}
     NATS_STREAM: ${NATS_STREAM:-PULSE_DELIVERIES}
     NATS_SUBJECT: ${NATS_SUBJECT:-pulse.deliveries.email}
     NATS_CONSUMER: ${NATS_CONSUMER:-delivery-worker}

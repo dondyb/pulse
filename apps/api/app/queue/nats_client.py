@@ -20,7 +20,8 @@ async def _on_error(exc: Exception) -> None:
 
 
 async def _on_disconnect() -> None:
-    log.warning("nats disconnected; reconnecting")
+    # Also fires on a normal close; a lost connection is retried automatically.
+    log.info("nats disconnected")
 
 
 async def _on_reconnect() -> None:
@@ -37,6 +38,8 @@ async def connect(*, name: str, reconnect: bool = True) -> Client:
         disconnected_cb=_on_disconnect,
         reconnected_cb=_on_reconnect,
     )
+    if settings.nats_user and "@" not in settings.nats_url:
+        options.update(user=settings.nats_user, password=settings.nats_password or "")
     if reconnect:
         # Once connected, reconnect forever after broker restarts.
         options.update(max_reconnect_attempts=-1, reconnect_time_wait=2)

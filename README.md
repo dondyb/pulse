@@ -110,9 +110,11 @@ Every variable has a working default, so `docker compose up` also works without 
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+psycopg://pulse:pulse@postgres:5432/pulse` | Database connection string for api, worker, cron and init |
+| `DATABASE_URL` | `postgresql+psycopg://pulse:pulse@postgres:5432/pulse` | Database connection string for api, worker, cron and init. Plain `postgres://` / `postgresql://` URLs are accepted and use the psycopg driver |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `pulse` | Credentials for the bundled PostgreSQL container (keep in sync with `DATABASE_URL`) |
 | `NATS_URL` | `nats://nats:4222` | Queue connection |
+| `NATS_USER`, `NATS_PASSWORD` | empty | Queue credentials, used when they aren't embedded in `NATS_URL` |
+| `PORT` | `8000` | API listen port for `python -m app.cli serve` (the image's default command) |
 | `NATS_STREAM`, `NATS_SUBJECT`, `NATS_CONSUMER` | `PULSE_DELIVERIES`, `pulse.deliveries.email`, `delivery-worker` | JetStream names |
 | `NATS_CONNECT_TIMEOUT_SECONDS` | `3` | Fail-fast timeout for queue connections |
 | `VITE_API_BASE_URL` | `/api` | API base URL used by the browser. `/api` goes through the web proxy; an absolute URL such as `http://localhost:8000/api` calls the API directly |
@@ -131,6 +133,27 @@ Every variable has a working default, so `docker compose up` also works without 
 | `DEMO_SCHEDULE_OFFSET_MINUTES` | `5` | When the seeded scheduled campaign is due after first setup |
 
 After changing `.env`, apply it with `docker compose up -d` (Compose recreates the affected containers).
+
+## Deploying to NEO App
+
+The backend image runs every role; only the command differs. Its default command, `python -m app.cli serve`, runs migrations and the one-time seed, then starts the API on `$PORT`.
+
+| Pulse service | NEO App resource | Source | Command |
+|---|---|---|---|
+| api | web service, port `8000` | `apps/api` Dockerfile | default (`python -m app.cli serve`) |
+| worker | worker service | `apps/api` Dockerfile | `python -m app.worker` |
+| cron | worker service | `apps/api` Dockerfile | `supercronic -passthrough-logs /app/crontab` |
+| frontend | static site | `apps/web` | build `npm ci && npm run build`, publish `dist` |
+| database | managed database (PostgreSQL) | — | bind to api, worker and cron |
+| queue | managed queue | — | bind to api, worker and cron |
+
+Binding the database injects `DATABASE_URL`, and binding the queue injects `NATS_URL`, `NATS_USER` and `NATS_PASSWORD`; the app accepts them as-is. Then set:
+
+- **api, worker, cron:** `DISPLAY_TIMEZONE=Asia/Jakarta`, `LOG_LEVEL=INFO`
+- **api:** `CORS_ORIGINS=https://<frontend-domain>`
+- **frontend (build time):** `VITE_API_BASE_URL=https://<api-domain>/api`
+
+Don't set `POSTGRES_*`, `FRONTEND_PORT`, `API_PORT` or `API_PROXY_TARGET` there; they only apply to local Docker Compose. Pulse needs JetStream on the queue, so confirm the managed queue supports it on staging first.
 
 ## Seed and reset
 
