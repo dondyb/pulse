@@ -1,0 +1,3 @@
+# Supercronic crontab (UTC). Runs the one-shot dispatcher every minute.
+# Supercronic does not start a new run while the previous one is still running.
+* * * * * python -m app.tasks.dispatch_due

@@ -1,0 +1,110 @@
+name: pulse
+
+# Shared settings for every service built from the backend image.
+x-backend: &backend
+  build:
+    context: ./apps/api
+  image: pulse-backend:local
+  environment: &backend-env
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pulse}:${POSTGRES_PASSWORD:-pulse}@postgres:5432/${POSTGRES_DB:-pulse}
+    NATS_URL: ${NATS_URL:-nats://nats:4222}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-Asia/Jakarta}
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    SIM_DELAY_MIN_MS: ${SIM_DELAY_MIN_MS:-600}
+    SIM_DELAY_MAX_MS: ${SIM_DELAY_MAX_MS:-1000}
+    DELIVERY_MAX_ATTEMPTS: ${DELIVERY_MAX_ATTEMPTS:-3}
+    RETRY_DELAYS_SECONDS: ${RETRY_DELAYS_SECONDS:-5,20}
+    CRON_CAMPAIGN_BATCH: ${CRON_CAMPAIGN_BATCH:-20}
+    CRON_OUTBOX_BATCH: ${CRON_OUTBOX_BATCH:-500}
+    CRON_MAX_SECONDS: ${CRON_MAX_SECONDS:-45}
+    DEMO_SCHEDULE_OFFSET_MINUTES: ${DEMO_SCHEDULE_OFFSET_MINUTES:-5}
+  volumes:
+    - ./apps/api/app:/app/app
+    - ./apps/api/alembic:/app/alembic
+    - ./apps/api/tests:/app/tests
+  depends_on: &after-init
+    init:
+      condition: service_completed_successfully
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulse}
+      POSTGRES_DB: ${POSTGRES_DB:-pulse}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    # Not published to the host. For debugging: docker compose exec postgres psql -U pulse
+
+  nats:
+    image: nats:2.10.22-alpine
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- 'http://localhost:8222/healthz?js-enabled-only=true' >/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  init:
+    <<: *backend
+    command: ["python", "-m", "app.cli", "init"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app", "--timeout-graceful-shutdown", "10"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "app.worker"]
+    stop_grace_period: 30s
+
+  cron:
+    <<: *backend
+    # `docker compose run --rm cron python -m app.tasks.dispatch_due` replaces this command.
+    command: ["supercronic", "-passthrough-logs", "/app/crontab"]
+    stop_grace_period: 60s
+
+  frontend:
+    build:
+      context: ./apps/web
+    image: pulse-frontend:local
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/index.html:/app/index.html
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  natsdata:
