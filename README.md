@@ -31,7 +31,7 @@ The first build downloads images and dependencies. After that, normal operation 
 
 Stop with `Ctrl+C`, or run `docker compose down` from another terminal. Data is kept in named volumes. `docker compose down -v` also deletes the volumes, and with them all data.
 
-Optional: `cp .env.example .env` to change ports or tuning. The defaults work without a `.env`.
+Configuration is read from `.env` (`cp .env.example .env`); see [Environment variables](#environment-variables).
 
 ## Local URLs
 
@@ -100,21 +100,37 @@ This replaces the cron service's normal Supercronic command for that one contain
 
 ## Environment variables
 
-All have working defaults (see `.env.example`).
+All configuration lives in `.env` (git-ignored). Start from the template:
+
+```bash
+cp .env.example .env
+```
+
+Every variable has a working default, so `docker compose up` also works without a `.env`. Compose passes these values to the containers; nothing is hard-coded in the services.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FRONTEND_PORT`, `API_PORT` | `3000`, `8000` | Host ports (bound to 127.0.0.1) |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `pulse` | Database credentials, used to build `DATABASE_URL` |
+| `DATABASE_URL` | `postgresql+psycopg://pulse:pulse@postgres:5432/pulse` | Database connection string for api, worker, cron and init |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `pulse` | Credentials for the bundled PostgreSQL container (keep in sync with `DATABASE_URL`) |
 | `NATS_URL` | `nats://nats:4222` | Queue connection |
+| `NATS_STREAM`, `NATS_SUBJECT`, `NATS_CONSUMER` | `PULSE_DELIVERIES`, `pulse.deliveries.email`, `delivery-worker` | JetStream names |
+| `NATS_CONNECT_TIMEOUT_SECONDS` | `3` | Fail-fast timeout for queue connections |
+| `VITE_API_BASE_URL` | `/api` | API base URL used by the browser. `/api` goes through the web proxy; an absolute URL such as `http://localhost:8000/api` calls the API directly |
+| `API_PROXY_TARGET` | `http://api:8000` | Where the web dev server forwards `/api` (inside Docker) |
+| `CORS_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | Origins allowed to call the API directly |
+| `FRONTEND_PORT`, `API_PORT` | `3000`, `8000` | Host ports (bound to 127.0.0.1) |
 | `LOG_LEVEL` | `INFO` | Structured JSON logs (no secrets or connection strings) |
 | `DISPLAY_TIMEZONE` | `Asia/Jakarta` | Business day for "today" metrics and charts |
 | `WORKER_CONCURRENCY` | `2` | Parallel deliveries per worker |
+| `WORKER_HEARTBEAT_SECONDS`, `JOB_LEASE_SECONDS` | `5`, `30` | Heartbeat interval; how long a claimed job is reserved |
 | `SIM_DELAY_MIN_MS`, `SIM_DELAY_MAX_MS` | `600`, `1000` | Simulated send time. Defaults process ~100 recipients in ~40 s |
 | `DELIVERY_MAX_ATTEMPTS` | `3` | Attempts per delivery run |
 | `RETRY_DELAYS_SECONDS` | `5,20` | Delay before attempt 2, 3, … |
 | `CRON_CAMPAIGN_BATCH`, `CRON_OUTBOX_BATCH`, `CRON_MAX_SECONDS` | `20`, `500`, `45` | Per-invocation bounds |
+| `OUTBOX_LEASE_SECONDS` | `30` | How long a claimed outbox row is reserved before republishing |
 | `DEMO_SCHEDULE_OFFSET_MINUTES` | `5` | When the seeded scheduled campaign is due after first setup |
+
+After changing `.env`, apply it with `docker compose up -d` (Compose recreates the affected containers).
 
 ## Seed and reset
 

@@ -5,12 +5,21 @@ x-backend: &backend
   build:
     context: ./apps/api
   image: pulse-backend:local
+  # Every value comes from .env (see .env.example); the fallbacks keep a bare
+  # `docker compose up` working without one.
   environment: &backend-env
-    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pulse}:${POSTGRES_PASSWORD:-pulse}@postgres:5432/${POSTGRES_DB:-pulse}
+    DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://pulse:pulse@postgres:5432/pulse}
     NATS_URL: ${NATS_URL:-nats://nats:4222}
+    NATS_STREAM: ${NATS_STREAM:-PULSE_DELIVERIES}
+    NATS_SUBJECT: ${NATS_SUBJECT:-pulse.deliveries.email}
+    NATS_CONSUMER: ${NATS_CONSUMER:-delivery-worker}
+    NATS_CONNECT_TIMEOUT_SECONDS: ${NATS_CONNECT_TIMEOUT_SECONDS:-3}
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
     DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-Asia/Jakarta}
     WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-5}
+    JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-30}
     SIM_DELAY_MIN_MS: ${SIM_DELAY_MIN_MS:-600}
     SIM_DELAY_MAX_MS: ${SIM_DELAY_MAX_MS:-1000}
     DELIVERY_MAX_ATTEMPTS: ${DELIVERY_MAX_ATTEMPTS:-3}
@@ -18,6 +27,7 @@ x-backend: &backend
     CRON_CAMPAIGN_BATCH: ${CRON_CAMPAIGN_BATCH:-20}
     CRON_OUTBOX_BATCH: ${CRON_OUTBOX_BATCH:-500}
     CRON_MAX_SECONDS: ${CRON_MAX_SECONDS:-45}
+    OUTBOX_LEASE_SECONDS: ${OUTBOX_LEASE_SECONDS:-30}
     DEMO_SCHEDULE_OFFSET_MINUTES: ${DEMO_SCHEDULE_OFFSET_MINUTES:-5}
   volumes:
     - ./apps/api/app:/app/app
@@ -94,7 +104,11 @@ services:
       context: ./apps/web
     image: pulse-frontend:local
     environment:
-      API_PROXY_TARGET: http://api:8000
+      # Where the web dev server forwards /api requests (server-side, inside Docker).
+      API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:8000}
+      # Base URL the browser uses for API calls. Keep "/api" to go through the proxy,
+      # or set an absolute URL (e.g. http://localhost:8000/api) and add its origin to CORS_ORIGINS.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     volumes:
