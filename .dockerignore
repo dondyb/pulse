@@ -1,7 +1,12 @@
-# Build context is the repo root; only the backend is needed in the image.
-*
-!apps/api/
-apps/api/**/__pycache__/
-apps/api/**/*.pyc
-apps/api/.pytest_cache/
-apps/api/.venv/
+# Build context is the repo root, shared by the backend Dockerfile and
+# platform-generated builds (e.g. NEO App static sites). Exclude only junk.
+.git
+.env
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.venv
+.playwright-mcp
+.remember
