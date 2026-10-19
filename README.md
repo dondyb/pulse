@@ -142,18 +142,16 @@ NEO App builds each service from the GitHub repo root, so the root is buildable:
 
 | Pulse service | NEO App resource | Build from GitHub (repo root) | Command / settings |
 |---|---|---|---|
-| api | web service, port `8000` | `Dockerfile` | default; health check `/api/health` |
+| api | web service, port `8000` | `Dockerfile` | default; health check `/api/health`; **domain = the web domain, path `/api`** |
 | worker | worker service | `Dockerfile` | `python -m app.worker` |
 | scheduler | worker service | `Dockerfile` | `supercronic -passthrough-logs /app/crontab` |
 | web | static site | build `npm ci && npm run build`, publish `dist` | — |
 | database | managed database (PostgreSQL 16) | — | bind to api, worker and scheduler |
 | queue | managed queue | — | bind to api, worker and scheduler |
 
-Binding the database injects `DATABASE_URL`, and binding the queue injects `NATS_URL`, `NATS_USER` and `NATS_PASSWORD`; the app accepts them as-is. Then set:
+Binding the database injects `DATABASE_URL`, and binding the queue injects `NATS_URL`, `NATS_USER` and `NATS_PASSWORD`; the app accepts them as-is. Set `DISPLAY_TIMEZONE=Asia/Jakarta` on api, worker and scheduler.
 
-- **api, worker, scheduler:** `DISPLAY_TIMEZONE=Asia/Jakarta`, `LOG_LEVEL=INFO`
-- **api:** `CORS_ORIGINS=https://<web-domain>`
-- **web (build time):** `VITE_API_BASE_URL=https://<api-domain>/api`
+Give the api service the **web service's domain with ingress path `/api`**. The browser then calls the API on the same origin, so the web build's default `VITE_API_BASE_URL=/api` works and no CORS setup is needed. (NEO App's static-site build doesn't pass service variables into the build, so a build-time API URL can't be set there.)
 
 Don't set `POSTGRES_*`, `FRONTEND_PORT`, `API_PORT` or `API_PROXY_TARGET` there; they only apply to local Docker Compose.
 
