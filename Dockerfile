@@ -1,4 +1,6 @@
-# One backend image for every entrypoint: api, worker, cron, and init.
+# Backend image (apps/api) for every entrypoint: api, worker, cron, and init.
+# It lives at the repo root, built with the root as context, so platforms that
+# build a Git repo from its root (e.g. NEO App) and Docker Compose share one file.
 FROM python:3.12.8-slim-bookworm
 
 ARG TARGETARCH
@@ -26,10 +28,10 @@ RUN set -eu; \
     chmod +x /usr/local/bin/supercronic
 
 WORKDIR /app
-COPY requirements.txt requirements-dev.txt ./
+COPY apps/api/requirements.txt apps/api/requirements-dev.txt ./
 RUN pip install -r requirements-dev.txt
 
-COPY . .
+COPY apps/api/ ./
 RUN useradd --create-home --uid 1000 pulse && chown -R pulse /app
 USER pulse
 

@@ -1,0 +1,8 @@
+{
+  "name": "pulse",
+  "private": true,
+  "description": "Monorepo root. `npm run build` builds the web app (apps/web) into ./dist for static hosting.",
+  "scripts": {
+    "build": "npm --prefix apps/web ci --no-audit --no-fund && npm --prefix apps/web run build -- --outDir ../../dist --emptyOutDir"
+  }
+}

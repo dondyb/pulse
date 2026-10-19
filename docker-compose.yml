@@ -3,7 +3,8 @@ name: pulse
 # Shared settings for every service built from the backend image.
 x-backend: &backend
   build:
-    context: ./apps/api
+    context: .
+    dockerfile: Dockerfile
   image: pulse-backend:local
   # Every value comes from .env (see .env.example); the fallbacks keep a bare
   # `docker compose up` working without one.

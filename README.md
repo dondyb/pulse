@@ -15,6 +15,8 @@ pulse/                      monorepo
 │   └── tests/              focused tests against real PostgreSQL
 ├── apps/web/               React + TypeScript + Vite + Tailwind + shadcn/ui + Recharts
 ├── scripts/reset-demo.sh   destructive demo reset (asks first)
+├── Dockerfile              backend image (builds apps/api from the repo root)
+├── package.json            root `npm run build` → builds apps/web into ./dist (static hosting)
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -136,24 +138,24 @@ After changing `.env`, apply it with `docker compose up -d` (Compose recreates t
 
 ## Deploying to NEO App
 
-The backend image runs every role; only the command differs. Its default command, `python -m app.cli serve`, runs migrations and the one-time seed, then starts the API on `$PORT`.
+NEO App builds each service from the GitHub repo root, so the root is buildable: `Dockerfile` builds the backend image (every role; only the command differs), and the root `package.json` builds the web app into `dist/`. The image's default command, `python -m app.cli serve`, runs migrations and the one-time seed, then starts the API on `$PORT`.
 
-| Pulse service | NEO App resource | Source | Command |
+| Pulse service | NEO App resource | Build from GitHub (repo root) | Command / settings |
 |---|---|---|---|
-| api | web service, port `8000` | `apps/api` Dockerfile | default (`python -m app.cli serve`) |
-| worker | worker service | `apps/api` Dockerfile | `python -m app.worker` |
-| cron | worker service | `apps/api` Dockerfile | `supercronic -passthrough-logs /app/crontab` |
-| frontend | static site | `apps/web` | build `npm ci && npm run build`, publish `dist` |
-| database | managed database (PostgreSQL) | — | bind to api, worker and cron |
-| queue | managed queue | — | bind to api, worker and cron |
+| api | web service, port `8000` | `Dockerfile` | default; health check `/api/health` |
+| worker | worker service | `Dockerfile` | `python -m app.worker` |
+| scheduler | worker service | `Dockerfile` | `supercronic -passthrough-logs /app/crontab` |
+| web | static site | build `npm ci && npm run build`, publish `dist` | — |
+| database | managed database (PostgreSQL 16) | — | bind to api, worker and scheduler |
+| queue | managed queue | — | bind to api, worker and scheduler |
 
 Binding the database injects `DATABASE_URL`, and binding the queue injects `NATS_URL`, `NATS_USER` and `NATS_PASSWORD`; the app accepts them as-is. Then set:
 
-- **api, worker, cron:** `DISPLAY_TIMEZONE=Asia/Jakarta`, `LOG_LEVEL=INFO`
-- **api:** `CORS_ORIGINS=https://<frontend-domain>`
-- **frontend (build time):** `VITE_API_BASE_URL=https://<api-domain>/api`
+- **api, worker, scheduler:** `DISPLAY_TIMEZONE=Asia/Jakarta`, `LOG_LEVEL=INFO`
+- **api:** `CORS_ORIGINS=https://<web-domain>`
+- **web (build time):** `VITE_API_BASE_URL=https://<api-domain>/api`
 
-Don't set `POSTGRES_*`, `FRONTEND_PORT`, `API_PORT` or `API_PROXY_TARGET` there; they only apply to local Docker Compose. Pulse needs JetStream on the queue, so confirm the managed queue supports it on staging first.
+Don't set `POSTGRES_*`, `FRONTEND_PORT`, `API_PORT` or `API_PROXY_TARGET` there; they only apply to local Docker Compose.
 
 ## Seed and reset
 
